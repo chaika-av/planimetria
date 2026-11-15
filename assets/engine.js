@@ -238,8 +238,109 @@
     var cs = getComputedStyle(root);
     return { fg: (cs.getPropertyValue('--color-text') || '#111').trim() || '#111', mu: (cs.getPropertyValue('--color-muted') || '#666').trim() || '#666', acc: '#d9534f' };
   }
+
+  /* ---------- строка значений: ввод числа и подбор чертежа ---------- */
+  function roCell(label, html, i, j, lg, st) {
+    var txt = String(html).replace(/<em[^>]*>.*?<\/em>/g, '').replace(/<[^>]+>/g, '').trim(), m = /^(-?\d+(?:[.,]\d+)?)(°)?$/.exec(txt), c = { label: label, html: html, i: i, j: j, num: null, unit: '', exact: false };
+    if (m) {
+      c.unit = m[2] || ''; c.num = parseFloat(m[1].replace(',', '.'));
+      var key = m[1].replace(',', '.') + c.unit, q, x = null;
+      for (q = st.p; q < lg.length; q++) if (lg[q].s === key) { x = lg[q].x; st.p = q + 1; break; }
+      if (x === null) for (q = 0; q < st.p; q++) if (lg[q].s === key) { x = lg[q].x; break; }
+      if (x !== null && Math.abs(x - c.num) < (c.unit ? 0.051 : 0.0051)) { c.num = x; c.exact = true; }
+    }
+    return c;
+  }
+  function roFmt(c) { return c.unit ? c.num.toFixed(1) : c.num.toFixed(2); }
+  function roRender(card, el, rows, cells, b) {
+    var sig = rows.map(function (r) { return r.map(function (c) { return c[0]; }).join('|'); }).join('/');
+    if (el._sig !== sig || !el._in) {
+      el._sig = sig; el._in = []; var k = 0;
+      el.innerHTML = rows.map(function (r) {
+        return '<div class="ro-row">' + r.map(function () {
+          var c = cells[k++]; return '<label class="ro-c"><span>' + subs(c.label) + '</span>' + (c.num !== null ? '<input class="ro-in" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" spellcheck="false" aria-label="Задать значение: ' + esc(String(c.label).replace(/<[^>]+>/g, '')) + '"><i class="ro-u">' + c.unit + '</i>' : '<b></b>') + '</label>';
+        }).join('') + '</div>';
+      }).join('');
+      var inputs = $$('.ro-c', el);
+      inputs.forEach(function (lab, n) {
+        var inp = $('input', lab); el._in[n] = inp;
+        if (!inp) return;
+        function commit() {
+          var v = parseFloat(String(inp.value).replace(',', '.'));
+          var c = card._roData && card._roData[n];
+          if (!c || !isFinite(v) || c.num === null) { if (c) inp.value = roFmt(c); return; }
+          if (Math.abs(v - c.num) < (c.unit ? 0.05 : 0.005)) { inp.value = roFmt(c); return; }
+          var ok = roSolve(card, b, n, v);
+          inp.classList.toggle('bad', !ok); lab.title = ok ? '' : 'Так подобрать чертёж не получается — попробуйте другое значение';
+          if (!ok) setTimeout(function () { inp.classList.remove('bad'); lab.title = ''; }, 2200);
+        }
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } else if (e.key === 'Escape') { var c = card._roData && card._roData[n]; if (c) inp.value = roFmt(c); inp.blur(); } });
+        inp.addEventListener('focus', function () { try { inp.select(); } catch (e) {} });
+        inp.addEventListener('blur', commit);
+      });
+    }
+    var bs = $$('.ro-c', el);
+    cells.forEach(function (c, n) {
+      var inp = el._in[n], lab = bs[n]; if (!lab) return;
+      if (inp) { if (document.activeElement !== inp && c.num !== null) inp.value = roFmt(c); }
+      else { var bb = $('b', lab); if (bb) bb.innerHTML = c.html; }
+    });
+  }
+  function roFree(b) {
+    return b.objectsList.filter(function (o) { return o.elementClass === JXG.OBJECT_CLASS_POINT && o.isDraggable && !(o.visProp && o.visProp.fixed) && o.visPropCalc && o.visPropCalc.visible !== false; });
+  }
+  function roSolve(card, b, n, target) {
+    var pts = roFree(b); if (!pts.length) return false;
+    var bb = b.getBoundingBox(), padx = (bb[2] - bb[0]) * 0.08, pady = (bb[1] - bb[3]) * 0.08;
+    var orig = pts.map(function (p) { return [p.X(), p.Y()]; }), cur = orig.map(function (q) { return q.slice(); });
+    function put(v) {                                              /* сначала свободные точки, затем (после пересчёта) точки на линиях */
+      var gl = false;
+      pts.forEach(function (p, i) { if (p.type === JXG.OBJECT_TYPE_GLIDER) gl = true; else p.setPositionDirectly(JXG.COORDS_BY_USER, [v[i][0], v[i][1]]); });
+      b.update();
+      if (gl) { pts.forEach(function (p, i) { if (p.type === JXG.OBJECT_TYPE_GLIDER) p.setPositionDirectly(JXG.COORDS_BY_USER, [v[i][0], v[i][1]]); }); b.update(); }
+    }
+    function actual() { return pts.map(function (p) { return [p.X(), p.Y()]; }); }
+    function val() { var c = card._roData && card._roData[n]; return c && c.num !== null ? c.num : NaN; }
+    var c0 = card._roData[n], tol = c0.exact ? (c0.unit ? 0.004 : 0.0004) : (c0.unit ? 0.049 : 0.0049), ok = false;
+    card._roMute = true;
+    try {
+      var f = val(), h = c0.exact ? 1e-4 : 0.05;
+      for (var it = 0; it < 80 && isFinite(f); it++) {
+        if (Math.abs(f - target) < tol) { ok = true; break; }
+        var g = [], gn = 0;
+        pts.forEach(function (p, i) {
+          var gi = [0, 0];
+          for (var d = 0; d < 2; d++) {
+            var t = cur.map(function (q) { return q.slice(); }); t[i][d] += h; put(t); var f1 = val();
+            t[i][d] -= 2 * h; put(t); var f2 = val();
+            gi[d] = isFinite(f1) && isFinite(f2) ? (f1 - f2) / (2 * h) : 0; gn += gi[d] * gi[d];
+          }
+          g.push(gi);
+        });
+        if (gn < 1e-10) { put(cur); break; }
+        var k = (target - f) / gn, maxs = Math.max(0.6, (bb[2] - bb[0]) * 0.12), L = Math.sqrt(k * k * gn);
+        if (L > maxs) k *= maxs / L;
+        var best = null, bf = Infinity;
+        for (var tr = 0; tr < 6; tr++) {
+          var cand = cur.map(function (q, i) { return [Math.min(bb[2] + padx, Math.max(bb[0] - padx, q[0] + g[i][0] * k)), Math.min(bb[1] + pady, Math.max(bb[3] - pady, q[1] + g[i][1] * k))]; });
+          put(cand); var fn = val();
+          if (isFinite(fn) && Math.abs(fn - target) < Math.abs(f - target)) { best = cand; bf = fn; break; }
+          k /= 2;
+        }
+        if (!best) { put(cur); break; }
+        put(best); cur = actual(); f = val();
+      }
+      if (!ok && isFinite(f) && Math.abs(f - target) < tol) ok = true;
+    } catch (e) { ok = false; }
+    if (!ok) put(orig); else put(cur);
+    card._roMute = false;
+    var el = $('.readout', card), cells = card._roData; if (el && cells) { var rows = []; cells.forEach(function (c) { (rows[c.i] = rows[c.i] || []).push([c.label, c.html]); }); roRender(card, el, rows, cells, b); }
+    try { b.update(); } catch (e) {}
+    return ok;
+  }
   function makeCtx(id, b, S, card) {
     var ns = id + '.', C = colors(), X = { b: b, C: C, S: S, id: id };
+    b.on('update', function () { if (window.GEO) window.GEO.log.length = 0; });
     function regKey(prim, tok, o, base, hi, setOnly) {
       var key = ns + prim; (REG[key] = REG[key] || []).push({ o: o, base: base, hi: hi, on: false });
       if (tok) {
@@ -314,9 +415,12 @@
         }, { strokeColor: C.fg, strokeWidth: 1.6, fixed: true, highlight: false });
       })(i);
     };
+    /* строка значений под чертежом: числа можно редактировать — чертёж подстраивается (см. roSolve) */
     X.ro = function (rows) {
       var el = $('.readout', card); if (!el) return;
-      el.innerHTML = rows.map(function (r) { return '<div class="ro-row">' + r.map(function (c) { return '<div class="ro-c"><span>' + subs(c[0]) + '</span><b>' + c[1] + '</b></div>'; }).join('') + '</div>'; }).join('');
+      var cells = [], lg = (window.GEO && window.GEO.log) || [], st = { p: 0 }; rows.forEach(function (r, i) { r.forEach(function (c, j) { cells.push(roCell(c[0], c[1], i, j, lg, st)); }); });
+      card._roData = cells; if (card._roMute) return;
+      roRender(card, el, rows, cells, b);
     };
     X.upd = function (fn) { b.on('update', fn); };
     /* анимация: X.anim({ dur:мс, label:'…', set:function(t){…}, steps:[[t,'подпись'],…] }) — кнопка ▶ + ползунок времени */
@@ -1197,8 +1301,31 @@
       } else t.nodeValue = t.nodeValue.replace(re, ' ');
     });
   }
+
+  /* предлог/союз перед формулой не остаётся на конце строки: слово, пробел и формула — в одну неразрывную группу
+     (перенос между неразрывным пробелом и формулой браузер всё равно разрешает) */
+  function glueShort() {
+    if (!main) return;
+    var re = /(^|[^A-Za-z0-9_Ѐ-ӿ\-–—])(в|к|с|о|у|и|а|я|но|на|по|за|из|от|до|ко|об|во|со|не|ни|да|то|для|при|над|под|про|без|или|как|что|чем|где)([  ])$/i;
+    var w = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, null), n, list = [];
+    while ((n = w.nextNode())) {
+      var nx = n.nextSibling, pv = n.previousSibling;
+      if (nx && pv && pv.nodeType === 1 && /^[ \u00a0]$/.test(n.nodeValue) && nx.nodeType === 1 && (nx.classList.contains('kx') || nx.querySelector('.kx')) && /(^|[^A-Za-z0-9_Ѐ-ӿ\-–—])(в|к|с|о|у|и|а|я|но|на|по|за|из|от|до|ко|об|во|со|не|ни|да|то|для|при|над|под|про|без|или|как|что|чем|где)$/i.test(pv.textContent || '') && !pv.closest('.katex, .kd, .nw')) { n.nodeValue = '\u00a0\u2060'; continue; }
+      if (!nx && n.parentElement && n.parentElement !== main && /^(MARK|EM|I|B|STRONG|SPAN)$/.test(n.parentElement.tagName) && !n.parentElement.classList.contains('nw') && re.test(n.nodeValue) && n.parentElement.nextSibling && n.parentElement.nextSibling.nodeType === 1 && (n.parentElement.nextSibling.classList.contains('kx') || n.parentElement.nextSibling.querySelector('.kx'))) { n.nodeValue += '\u2060'; continue; }
+      if (!nx || nx.nodeType !== 1 || !re.test(n.nodeValue)) continue;
+      if (!(nx.classList.contains('kx') || nx.classList.contains('ht') || nx.classList.contains('nb') || nx.querySelector('.kx'))) continue;
+      if (n.parentElement && n.parentElement.closest('.katex, .kd, .katex-mathml, script, style, .nw')) continue;
+      list.push(n);
+    }
+    list.forEach(function (t) {
+      var m = re.exec(t.nodeValue), nx = t.nextSibling, cut = m.index + m[1].length, word = t.nodeValue.slice(cut, -1) + ' ';
+      t.nodeValue = t.nodeValue.slice(0, cut);
+      var wr = document.createElement('span'); wr.className = 'nw'; nx.parentNode.insertBefore(wr, nx);
+      wr.appendChild(document.createTextNode(word)); wr.appendChild(nx);
+    });
+  }
   function enhance() {
-    glueRel(); readability(); keyFormulas(); symInit();
+    glueRel(); glueShort(); readability(); keyFormulas(); symInit();
     addAnchors(); linkRefs(); showResume(); restorePos(); buildChNav(); withToc(function () { buildTree(); linkSecRefs(); linkParas(); }); treeByScroll(); openHash();
     window.addEventListener('scroll', function () { if (!enhance.r) enhance.r = requestAnimationFrame(function () { enhance.r = 0; treeByScroll(); }); }, { passive: true });
   }

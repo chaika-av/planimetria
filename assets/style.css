@@ -507,7 +507,13 @@ p.blk > b.kw { color: var(--bk); }
 @media (max-width: 899px) { .formula-scroll.keyf { margin-left: -.45em; margin-right: -.45em; padding: 0 .45em; } }
 
 .nb { white-space: nowrap; }
-.figcard .readout { display: none !important; }
+.nw { white-space: nowrap; }
+.nw:has(.kx.wide) { white-space: normal; }
+ .ro-in { width: 3.9em; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text); background: transparent; border: 0; border-bottom: 1px dotted var(--color-muted); border-radius: 0; padding: 0 1px; text-align: right; }
+.ro-in:focus { outline: 0; border-bottom: 1px solid var(--color-text); }
+.ro-in.bad { color: var(--acc); border-bottom-color: var(--acc); }
+.ro-u { font-style: normal; color: var(--color-muted); margin-left: -5px; }
+.ro-u:empty { display: none; }
 
 /* правки для вычитки: яркая жёлтая «маркерная» подсветка (убирается скриптом strip_rev.py) */
 mark.rev { background: rgba(255, 221, 0, .62); color: inherit; border-radius: 3px; padding: .05em .12em; margin: 0 -.12em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }

@@ -7,8 +7,9 @@
       if (lu < 1e-6 || lv < 1e-6) return NaN;
       return Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (lu * lv))));
     },
-    f2: function (x) { return isFinite(x) ? x.toFixed(2) : '—'; },
-    deg: function (x) { return isFinite(x) ? (x * 180 / Math.PI).toFixed(1) + '°' : '—'; },
+    log: [],                                                     /* журнал «строка → точное значение»: по строке значений под чертежом подбирается положение точек */
+    f2: function (x) { if (!isFinite(x)) return '—'; var s = x.toFixed(2), L = window.GEO.log; L.push({ s: s, x: x }); if (L.length > 300) L.shift(); return s; },
+    deg: function (x) { if (!isFinite(x)) return '—'; var d = x * 180 / Math.PI, s = d.toFixed(1) + '°', L = window.GEO.log; L.push({ s: s, x: d }); if (L.length > 300) L.shift(); return s; },
     ok: function (a, b, tol) { if (!isFinite(a) || !isFinite(b)) return ''; return Math.abs(a - b) <= (tol || 0.006) ? '<em class="ok">✓</em>' : '<em class="bad">≠</em>'; },
     foot: function (P, A, B) {                                   /* основание перпендикуляра из P на прямую AB */
       var dx = B.X() - A.X(), dy = B.Y() - A.Y(), l2 = dx * dx + dy * dy || 1e-12, t = ((P.X() - A.X()) * dx + (P.Y() - A.Y()) * dy) / l2;
