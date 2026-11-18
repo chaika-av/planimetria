@@ -524,3 +524,105 @@ mark.rev { background: rgba(255, 221, 0, .62); color: inherit; border-radius: 3p
 :root[data-theme="dark"] .rev-d { background: rgba(255, 214, 0, .38); }
 :root[data-theme="sepia"] .rev-d { background: rgba(255, 205, 0, .6); }
 @media print { .rev-d { background: none; } }
+
+/* TYPO-BEGIN */
+/* =====================================================================
+   КНИЖНАЯ ТИПОГРАФИКА
+   Гарнитура основного текста — Lora (Cyreal, лицензия OFL; файлы и лицензия в assets/fonts/).
+   Рубленый шрифт остаётся для интерфейса (меню, кнопки, подписи к чертежам) и включается
+   для всего текста переключателем «Шрифт» в настройках чтения (html[data-ff="sans"]).
+   Единый масштаб формул --ks перекрывает прежние размеры .katex выше по файлу.
+   Источник блока: book_src/typo.css (вставляет book_src/typo_apply.py).
+   ===================================================================== */
+@font-face { font-family: "Lora Book"; src: url(fonts/lora.woff) format("woff"); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lora Book"; src: url(fonts/lora-italic.woff) format("woff"); font-weight: 400 700; font-style: italic; font-display: swap; }
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-text: "Lora Book", Georgia, "Times New Roman", serif;
+  --tx: 1.125rem;       /* кегль основного текста */
+  --lh: 1.6;            /* интерлиньяж */
+  --ks: 1.08;           /* кегль формул относительно текста: цифры и прописные CM ≈ как в Lora */
+  --gut: 14px;          /* поля страницы на телефоне */
+  --pgap: .8em;         /* просвет между абзацами */
+  --measure: 40rem;     /* длина строки (переопределяется настройкой «Ширина текста») */
+}
+html[data-ff="sans"] { --font-text: var(--font-ui); --tx: 1.05rem; --lh: 1.68; --ks: 1.15; }
+@media (max-width: 599px) { :root { --tx: 1.0625rem; } }
+@media (min-width: 600px) { :root { --gut: 24px; } }
+
+/* ---- рамка страницы: одна колонка для текста, формул, блоков и чертежей ---- */
+body { padding-left: var(--gut); padding-right: var(--gut); }
+main.chapter { max-width: var(--measure); margin-left: auto; margin-right: auto; font-family: var(--font-text); font-kerning: normal; font-variant-ligatures: common-ligatures; text-rendering: optimizeLegibility; }
+@media (min-width: 900px) { body { padding-left: 36px; padding-right: 36px; } }
+.titlepage { max-width: none; }
+
+/* ---- основной текст ---- */
+main.chapter > p, .titlepage > p { font-size: var(--tx); line-height: calc(var(--lh) * var(--lhk, 1)); margin-bottom: var(--pgap); }
+main.chapter > p { max-width: none; text-wrap: pretty; }
+@media (max-width: 599px) { main.chapter > p { hyphens: auto; -webkit-hyphens: auto; hyphenate-limit-chars: 8 4 3; } }
+main.chapter b, main.chapter strong { font-weight: 600; }
+.kw { font-weight: 600; letter-spacing: 0; }
+/* строка-отсылка «(Рис. 5.1)» — справочная, не основной текст */
+main.chapter > p.figcall { font-size: calc(var(--tx) * .86); color: var(--color-muted); margin-bottom: .55em; }
+
+/* ---- формулы: единый кегль, привязанный к тексту ---- */
+.formula-scroll, .kdr { font-size: var(--tx); }
+.katex, .formula-block .katex, .kdr .katex, .kx .katex, .figcard .katex { font-size: calc(var(--ks) * 1em * var(--mf, 1)); }
+.kx:has(.mfrac) { margin-top: .26em; margin-bottom: .26em; }
+/* группа «формула + знак препинания / предлог» (engine.js, glueShort и glueEdges) не переносится внутри себя;
+   вложенный подсвеченный, курсивный или поясняемый (.ht) фрагмент переносится как обычно — иначе длинная фраза не поместилась бы в строке */
+:is(.nw, .np) > :not(.kx, .nb, .nw, .np, :is(.ht, a.secref):has(> .kx:only-child)) { white-space: normal; }
+/* Chrome решает, можно ли перенести строку сразу после формулы, по white-space ближайшего элемента вокруг неё: поэтому подсказка .ht или ссылка a.secref («п. ⟨3⟩»), в которой только формула, остаётся nowrap, и формула не отрывается от знака после неё */
+:is(.nw, .np) .kx { white-space: nowrap; }
+/* группа, которая при нынешней ширине экрана или размере формул не умещается в строке, освобождается от запрета переноса (engine.js, releaseWide) */
+.nw.rel { white-space: normal; }
+/* формула во всю ширину строки и знак препинания после неё: знак «висит» в поле, а не уходит один на следующую строку */
+.np { white-space: nowrap; }
+/* цепочка формул подряд — один вывод: просвет между ними меньше, чем между текстом и формулой */
+.formula-scroll + .formula-scroll { margin-top: -.7em; }
+
+/* ---- заголовки ---- */
+main.chapter h1, main.chapter h2 { font-family: var(--font-text); text-wrap: balance; hyphens: manual; -webkit-hyphens: manual; overflow-wrap: break-word; }
+/* на узком экране очень длинное слово заголовка («перпендикулярными») переносится с дефисом, а не вылезает за край */
+@media (max-width: 599px) { main.chapter h1, main.chapter h2 { hyphens: auto; -webkit-hyphens: auto; hyphenate-limit-chars: 13 5 5; } }
+main.chapter > header { margin: 1.2rem 0 1.9rem; padding-bottom: 0; }
+@media (min-width: 900px) { main.chapter > header { margin-top: 2.2rem; } }
+main.chapter h1 { font-size: clamp(1.6rem, 1.25rem + 1.7vw, 2.2rem); font-weight: 560; letter-spacing: -.012em; line-height: 1.16; }
+.chapter-num { font-family: var(--font-ui); font-size: .74rem; font-weight: 600; letter-spacing: .14em; margin-bottom: .75rem; }
+main.chapter h2 { font-size: 1.3rem; font-weight: 580; line-height: 1.26; margin: 2.2em 0 .75em; letter-spacing: -.004em; }
+
+/* ---- титульная страница ---- */
+main.chapter .titlepage { min-height: 74vh; padding: 9vh 0 5vh; }
+.titlepage > .tp-a { font-size: 1.08rem; color: var(--color-text); margin-bottom: .15em; }
+.titlepage > .tp-p { font-family: var(--font-ui); font-size: .74rem; font-weight: 600; letter-spacing: .14em; margin-bottom: 2.6rem; }
+main.chapter .titlepage h1 { font-size: clamp(2.3rem, 9vw, 3.5rem); line-height: 1.06; letter-spacing: -.02em; margin-bottom: 1.6rem; }
+.titlepage > .tp-e { font-size: .98rem; margin-bottom: .1em; }
+.titlepage > .tp-go { margin-top: 2.4rem; font-family: var(--font-ui); font-size: .95rem; }
+.tp-go a { color: var(--color-text); text-decoration: none; border-bottom: 1px solid var(--color-muted); padding-bottom: 2px; }
+.t-prog { margin: 2.2rem 0 0; max-width: 360px; text-align: left; font-family: var(--font-ui); }
+
+/* ---- интерфейс внутри книги — рубленый ---- */
+.figcard, .chnav, .t-go, a.pdflink, .hint, .resume, .anc, #tests { font-family: var(--font-ui); }
+#tests :is(.t-q, .t-opt, .t-fb, .t-hint, .t-rev, .t-wr, .t-name, .t-lead, .t-ex, .t-revl) { font-family: var(--font-text); }
+#tests .t-q { font-size: calc(var(--tx) * 1.04); line-height: calc(var(--lh) * 1.04); }
+#xm .xb { font-family: var(--font-text); }
+#chList .n { font-variant-numeric: tabular-nums; }
+@media (max-width: 440px) { #tests .t-acts2 .mini { padding-left: 13px; padding-right: 13px; } }
+
+/* ---- список литературы ---- */
+ol.lit { padding-left: 2.4em; }
+ol.lit li { margin-bottom: .5em; padding-left: .15em; line-height: 1.5; font-size: calc(var(--tx) * .96); }
+ol.lit li::marker { font-variant-numeric: tabular-nums; color: var(--color-muted); }
+
+/* ---- выделение ---- */
+::selection { background: color-mix(in srgb, var(--color-text) 16%, transparent); }
+
+/* ---- печать ---- */
+@media print {
+  :root { --tx: 11.5pt; --lh: 1.45; --gut: 0px; }
+  main.chapter > p { orphans: 3; widows: 3; hyphens: auto; -webkit-hyphens: auto; }
+  main.chapter h1, main.chapter h2 { break-after: avoid; }
+  .formula-scroll, p.blk { break-inside: avoid; }
+}
+/* TYPO-END */

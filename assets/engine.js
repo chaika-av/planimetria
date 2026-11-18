@@ -191,7 +191,22 @@
       });
     });
   }
-  var fitT; function fitSoon() { clearTimeout(fitT); fitT = setTimeout(function () { fitFormulas(document); }, 120); }
+  var fitT; function fitSoon() { clearTimeout(fitT); fitT = setTimeout(function () { fitFormulas(document); glueAgain(); }, 120); }
+  function glueAgain() { try { glueShort(); glueEdges(); releaseWide(); } catch (e) {} }
+  /* неразрывная группа, не умещающаяся в строке (выросла формула, сменилась ширина экрана или размер шрифта), получает класс rel — переносится как обычный текст */
+  function releaseWide() {
+    if (!main) return;
+    var gs = main.querySelectorAll('.nw'), i, e, w, pp, cs, av, over = [];
+    for (i = 0; i < gs.length; i++) gs[i].classList.remove('rel');
+    for (i = 0; i < gs.length; i++) {
+      e = gs[i];
+      try {
+        w = e.getBoundingClientRect().width;
+        if (w > main.clientWidth * 0.5) { pp = e.closest('p, li') || main; cs = getComputedStyle(pp); av = pp.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0); if (w > av + 1) over.push(e); }
+      } catch (x) {}
+    }
+    for (i = 0; i < over.length; i++) over[i].classList.add('rel');
+  }
 
   /* ---------- геометрия ---------- */
   var GEO = window.GEO;
@@ -715,20 +730,21 @@
     (function () {
       var LH = { a: [.92, 'Плотно'], b: [1, 'Обычно'], c: [1.14, 'Свободно'] }, MW = { a: [34, 'Уже'], b: [40, 'Обычно'], c: [48, 'Шире'] };
       var rs = document.createElement('div'); rs.id = 'rSet';
-      rs.innerHTML = '<div class="rs-row"><span class="rs-l">Строки</span><div class="rs-seg" data-k="lh"></div></div><div class="rs-row rs-mw"><span class="rs-l">Ширина текста</span><div class="rs-seg" data-k="mw"></div></div><div class="rs-row"><span class="rs-l">Цвета соответствий (текст и чертёж)</span><div class="rs-seg" data-k="cg"></div></div><div class="rs-row"><span class="rs-l">Формулы</span><div class="rs-fm"><button type="button" id="mfMinus" aria-label="Формулы меньше">−</button><span id="mfVal">100%</span><button type="button" id="mfPlus" aria-label="Формулы больше">+</button></div></div>';
+      rs.innerHTML = '<div class="rs-row"><span class="rs-l">Шрифт</span><div class="rs-seg" data-k="ff"></div></div><div class="rs-row"><span class="rs-l">Строки</span><div class="rs-seg" data-k="lh"></div></div><div class="rs-row rs-mw"><span class="rs-l">Ширина текста</span><div class="rs-seg" data-k="mw"></div></div><div class="rs-row"><span class="rs-l">Цвета соответствий (текст и чертёж)</span><div class="rs-seg" data-k="cg"></div></div><div class="rs-row"><span class="rs-l">Формулы</span><div class="rs-fm"><button type="button" id="mfMinus" aria-label="Формулы меньше">−</button><span id="mfVal">100%</span><button type="button" id="mfPlus" aria-label="Формулы больше">+</button></div></div>';
       box.appendChild(rs);
       function fill(k, M) { var h = ''; for (var i in M) h += '<button type="button" data-v="' + i + '">' + M[i][1] + '</button>'; $('.rs-seg[data-k="' + k + '"]', rs).innerHTML = h; }
-      fill('lh', LH); fill('mw', MW); $('.rs-seg[data-k="cg"]', rs).innerHTML = '<button type="button" data-v="1">Вкл</button><button type="button" data-v="0">Выкл</button>';
+      fill('lh', LH); fill('mw', MW); fill('ff', { s: [0, 'С засечками'], g: [0, 'Без засечек'] }); $('.rs-seg[data-k="cg"]', rs).innerHTML = '<button type="button" data-v="1">Вкл</button><button type="button" data-v="0">Выкл</button>';
       function applyCG(v, rb) { try { localStorage.setItem('bk-cg', v); } catch (e) {} $$('.rs-seg[data-k="cg"] button', rs).forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); if (rb) { $$('[data-c]').forEach(function (el) { el.removeAttribute('data-c'); }); rebuildAll(); } }
+      function applyFF(v) { if (v !== 'g') v = 's'; if (v === 'g') root.setAttribute('data-ff', 'sans'); else root.removeAttribute('data-ff'); $$('.rs-seg[data-k="ff"] button', rs).forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); st.set('bk-ff', v); }
       function applyLH(v) { if (!LH[v]) v = 'b'; root.style.setProperty('--lhk', LH[v][0]); $$('.rs-seg[data-k="lh"] button', rs).forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); st.set('bk-lh', v); }
       function applyMW(v) { if (!MW[v]) v = 'b'; root.style.setProperty('--measure', MW[v][0] + 'rem'); $$('.rs-seg[data-k="mw"] button', rs).forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); }); st.set('bk-mw', v); }
       function applyMF(v) { v = Math.min(1.4, Math.max(0.85, Math.round(v * 100) / 100)); root.style.setProperty('--mf', v); $('#mfVal', rs).textContent = Math.round(v * 100) + '%'; st.set('bk-mf', v); }
       rs.addEventListener('click', function (e) {
         var b = e.target.closest('button'); if (!b) return; var sg = b.closest('.rs-seg');
-        if (sg) { if (sg.dataset.k === 'lh') applyLH(b.dataset.v); else if (sg.dataset.k === 'cg') applyCG(b.dataset.v, true); else applyMW(b.dataset.v); fitSoon(); return; }
+        if (sg) { if (sg.dataset.k === 'ff') applyFF(b.dataset.v); else if (sg.dataset.k === 'lh') applyLH(b.dataset.v); else if (sg.dataset.k === 'cg') applyCG(b.dataset.v, true); else applyMW(b.dataset.v); fitSoon(); return; }
         if (b.id === 'mfMinus') applyMF(st.get('bk-mf', 1) - 0.05); else if (b.id === 'mfPlus') applyMF(st.get('bk-mf', 1) + 0.05); else return; fitSoon();
       });
-      applyLH(st.get('bk-lh', 'b')); applyMW(st.get('bk-mw', 'b')); applyMF(st.get('bk-mf', 1)); applyCG(COLG() ? '1' : '0', false);
+      applyFF(st.get('bk-ff', 's')); applyLH(st.get('bk-lh', 'b')); applyMW(st.get('bk-mw', 'b')); applyMF(st.get('bk-mf', 1)); applyCG(COLG() ? '1' : '0', false);
     })();
     /* экран не гаснет */
     if ('wakeLock' in navigator) {
@@ -1068,7 +1084,14 @@
   });
   /* ---------- пошаговый разбор доказательства ---------- */
   var STEP = null;
-  function isItemStart(x) { var k = x.tagName === 'P' && x.firstElementChild; if (k && k.classList.contains('lbl')) k = k.nextElementSibling; return !!k && k.classList.contains('kx') && /^\\left\\langle \\mathbf\{\d+\} \\right\\rangle$/.test(k.dataset.tex || ''); }
+  function isItemStart(x) {
+    if (x.tagName !== 'P') return false;
+    var emptyRe = new RegExp('^[\\s' + String.fromCharCode(0x2060) + ']*$');
+    function skip(n) { while (n && n.nodeType === 3 && emptyRe.test(n.nodeValue)) n = n.nextSibling; return n; }
+    var k = skip(x.firstChild);
+    if (k && k.nodeType === 1 && k.classList.contains('lbl')) k = skip(k.nextSibling);
+    return !!k && k.nodeType === 1 && k.classList.contains('kx') && /^\\left\\langle \\mathbf\{\d+\} \\right\\rangle$/.test(k.dataset.tex || '');
+  }
   function stepGroups(start) {
     var out = [start], el = start.nextElementSibling;
     while (el && el.tagName !== 'H2' && !isItemStart(el)) { if (!el.classList.contains('figcard') && !el.classList.contains('figph') && !el.classList.contains('stepbar')) out.push(el); el = el.nextElementSibling; }
@@ -1144,22 +1167,28 @@
   /* ---------- удобочитаемость текста ---------- */
   function readability() {
     if (!main) return;
-    var CONN = /^(Следовательно|Тогда|Так как|Значит|Поэтому|Таким образом|Отсюда|Из подобия|Пусть|Рассмотрим|Докажем|Заметим|Обратим внимание|Кроме того|Далее|Теперь|Итак|Аналогично|Получим|Проведём|Опустим|Применим|Обозначим)(?=[\s,])/;
-    var KW = /^(\s*)(Теорема|Обратная теорема|Следствие|Утверждение|Лемма|Определение|Задача|Пример|Доказательство|Дано|Доказать|Замечание)(?=[\s.:,—-])/;
+    var CONN = /^(Следовательно|Тогда|Так\sкак|Значит|Поэтому|Таким\sобразом|Отсюда|Из\sподобия|Пусть|Рассмотрим|Докажем|Заметим|Обратим\sвнимание|Кроме\sтого|Далее|Теперь|Итак|Аналогично|Получим|Проведём|Опустим|Применим|Обозначим)(?=[\s,])/;
+    var KW = /^(\s*)(?:(Теорема|Обратная\sтеорема|Следствие|Утверждение|Лемма|Определение|Задача|Пример|Замечание)(?=[.:,—-]|\s*\(|\s+\d)|(Доказательство|Дано|Доказать)(?=[\s.:,—-]))/;
     function endsSent(n) {
+      while (isW(n)) n = n.lastChild;
       if (!n) return false;
       if (n.nodeType === 3) return /[.;:!?]\s*$/.test(n.nodeValue);
       if (n.nodeType === 1 && n.classList.contains('kx')) return /[.;]\s*$/.test(n.dataset.tex || '');
       return false;
     }
-    function wlen(n) { return n.nodeType === 3 ? n.nodeValue.length : (n.classList && n.classList.contains('kx') ? 6 : (n.textContent || '').length); }
+    /* обёртки .nw/.np (склейка формулы со словом или знаком: glueShort, glueEdges) прозрачны для подсчёта длины текста: считаем так, будто их нет */
+    var WJ = String.fromCharCode(0x2060);
+    function isW(n) { return !!n && n.nodeType === 1 && (n.classList.contains('nw') || n.classList.contains('np')); }
+    function parts(el) { var out = [], buf = null; (function walk(e) { [].forEach.call(e.childNodes, function (n) { if (n.nodeType === 3) { buf = (buf === null ? '' : buf) + n.nodeValue.split(WJ).join(''); return; } if (isW(n)) { walk(n); return; } if (buf !== null) { out.push(buf); buf = null; } out.push(n); }); })(el); if (buf !== null) out.push(buf); return out; }
+    function wlen(n) { if (typeof n === 'string') return n.length; if (n.nodeType === 3) return n.nodeValue.length; if (n.classList && n.classList.contains('kx')) return 6; if (isW(n)) return parts(n).reduce(function (a, x) { return a + wlen(x); }, 0); return (n.textContent || '').length; }
     $$('p', main).forEach(function (p) {
       if (p.classList.contains('fig-note') || p.dataset.rd) return; p.dataset.rd = '1';
+      if (/^\(Рис\.[\s\u00a0]*[\d.]+[а-яa-z]?\)\.?$/i.test((p.textContent || '').trim())) p.classList.add('figcall');
       if (isItemStart(p)) p.classList.add('item');
       var first = p.classList.contains('item') ? p.firstElementChild.nextSibling : p.firstChild;
       if (first && first.nodeType === 3) {
         var km = KW.exec(first.nodeValue);
-        if (km) { var rest = first.splitText(km[0].length), b = document.createElement('b'); b.className = 'kw'; b.textContent = km[2]; first.nodeValue = km[1]; p.insertBefore(b, rest); }
+        if (km) { var kwt = km[2] || km[3], rest = first.splitText(km[0].length), b = document.createElement('b'); b.className = 'kw'; b.textContent = kwt; first.nodeValue = km[1]; p.insertBefore(b, rest); }
       }
       /* метки: Дано / Доказать / Вывод и опорные блоки */
       if (!p.querySelector('.lbl')) {
@@ -1167,18 +1196,18 @@
         var kwEl = p.querySelector(':scope > b.kw');
         if (!kwEl) {
           var fb = null; for (var ci = 0; ci < p.childNodes.length; ci++) { var cn = p.childNodes[ci]; if (cn.nodeType === 3 && !cn.nodeValue.trim()) continue; if (cn.nodeType === 1 && cn.classList.contains('kx') && /^\\left\\langle/.test(cn.dataset.tex || '')) continue; fb = cn; break; }
-          if (fb && fb.nodeType === 1 && fb.tagName === 'B') { var bt = fb.textContent.trim(); if (/^(Обратная теорема|Теорема|Следствие|Утверждение|Лемма|Признак|Свойство)(?![А-Яа-я])/.test(bt)) p.classList.add('blk', 'b-th'); else if (/^Определение(?![А-Яа-я])/.test(bt)) p.classList.add('blk', 'b-df'); }
+          if (fb && fb.nodeType === 1 && fb.tagName === 'B') { var bt = fb.textContent.trim(); if (/^(Обратная\sтеорема|Теорема|Следствие|Утверждение|Лемма|Признак|Свойство)(?![А-Яа-я])/.test(bt)) p.classList.add('blk', 'b-th'); else if (/^Определение(?![А-Яа-я])/.test(bt)) p.classList.add('blk', 'b-df'); }
         }
-        if (kwEl) { var kt = kwEl.textContent; if (/^(Теорема|Обратная теорема|Следствие|Утверждение|Лемма)$/.test(kt)) p.classList.add('blk', 'b-th'); else if (kt === 'Определение') p.classList.add('blk', 'b-df'); else if (kt === 'Замечание') p.classList.add('blk', 'b-nt'); else if (kt === 'Дано') p.classList.add('blk', 'b-gv'); else if (kt === 'Доказать') p.classList.add('blk', 'b-pr'); }
+        if (kwEl) { var kt = kwEl.textContent; if (/^(Теорема|Обратная\sтеорема|Следствие|Утверждение|Лемма)$/.test(kt)) p.classList.add('blk', 'b-th'); else if (kt === 'Определение') p.classList.add('blk', 'b-df'); else if (kt === 'Замечание') p.classList.add('blk', 'b-nt'); else if (kt === 'Дано') p.classList.add('blk', 'b-gv'); else if (kt === 'Доказать') p.classList.add('blk', 'b-pr'); }
         else if (ft) {
           var t0 = ft.replace(/^\s+/, ''), lab = null, cls = '';
-          if (/^(Докажем|Доказать|Для доказательства|Чтобы доказать|Нужно доказать)/.test(t0)) { lab = 'Доказать'; cls = 'l-do'; }
-          else if (/^(Следовательно|Значит|Таким образом|Итак|Отсюда|Поэтому)(?=[\s,])/.test(t0)) { lab = 'Вывод'; cls = 'l-so'; }
+          if (/^(Докажем|Доказать|Для\sдоказательства|Чтобы\sдоказать|Нужно\sдоказать)/.test(t0)) { lab = 'Доказать'; cls = 'l-do'; }
+          else if (/^(Следовательно|Значит|Таким\sобразом|Итак|Отсюда|Поэтому)(?=[\s,])/.test(t0)) { lab = 'Вывод'; cls = 'l-so'; }
           else if (/^(Дано|Дан[аоы]?|Пусть)(?=[\s,])/.test(t0)) { lab = 'Дано'; cls = 'l-gv'; }
-          else if (/^(Заметим|Обратим внимание|Отметим|Полезно (заметить|обратить|отметить)|Напомним)/.test(t0)) { lab = 'Замечание'; cls = 'l-nt'; }
-          if (lab) { var tl = 0; [].forEach.call(p.childNodes, function (n) { if (n.nodeType === 3) tl += n.nodeValue.trim().length; else if (!(n.classList && n.classList.contains('kx'))) tl += (n.textContent || '').trim().length; }); if (tl >= 40) p.classList.add('blk', cls); }
+          else if (/^(Заметим|Обратим\sвнимание|Отметим|Полезно\s(заметить|обратить|отметить)|Напомним)/.test(t0)) { lab = 'Замечание'; cls = 'l-nt'; }
+          if (lab) { var tl = 0; parts(p).forEach(function (n) { if (typeof n === 'string') tl += n.trim().length; else if (!(n.classList && n.classList.contains('kx'))) tl += (n.textContent || '').trim().length; }); if (tl >= 40) p.classList.add('blk', cls); }
         }
-        if (/что и требовалось доказать/i.test(p.textContent) && !p.querySelector('.qed')) { var q = document.createElement('span'); q.className = 'qed'; q.textContent = '∎'; q.setAttribute('aria-hidden', 'true'); p.appendChild(q); p.classList.add('blk', 'b-qed'); }
+        if (/что\sи\sтребовалось\sдоказать/i.test(p.textContent) && !p.querySelector('.qed')) { var q = document.createElement('span'); q.className = 'qed'; q.textContent = '∎'; q.setAttribute('aria-hidden', 'true'); p.appendChild(q); p.classList.add('blk', 'b-qed'); }
       }
       var len = 0; [].forEach.call(p.childNodes, function (n) { len += wlen(n); });
       if (len < 220) return;
@@ -1302,30 +1331,117 @@
     });
   }
 
-  /* предлог/союз перед формулой не остаётся на конце строки: слово, пробел и формула — в одну неразрывную группу
-     (перенос между неразрывным пробелом и формулой браузер всё равно разрешает) */
+  /* предлог/союз перед формулой не остаётся на конце строки: слово, неразрывный пробел и формула — в одну группу span.nw
+     (перенос между неразрывным пробелом и формулой-блоком браузер иначе разрешает; невидимый U+2060 помогает не везде).
+     Подсвеченный/курсивный фрагмент внутри группы переносится как обычно (см. .nw > mark в style.css) */
   function glueShort() {
     if (!main) return;
-    var re = /(^|[^A-Za-z0-9_Ѐ-ӿ\-–—])(в|к|с|о|у|и|а|я|но|на|по|за|из|от|до|ко|об|во|со|не|ни|да|то|для|при|над|под|про|без|или|как|что|чем|где)([  ])$/i;
+    var NB = String.fromCharCode(160), WJ = String.fromCharCode(0x2060), CY = String.fromCharCode(0x400) + '-' + String.fromCharCode(0x4ff),
+        INL = /^(MARK|EM|I|B|STRONG)$/, PRE = '(^|[^A-Za-z0-9_' + CY + '\\-–—])',
+        SW = '(в|к|с|о|у|и|а|я|но|на|по|за|из|от|до|ко|об|во|со|не|ни|да|то|для|при|над|под|про|без|или|как|что|чем|где|п\\.|пп\\.)',
+        re = new RegExp(PRE + SW + '([ ' + NB + '])' + WJ + '?$', 'i'), reEnd = new RegExp(PRE + SW + '$', 'i'), reSp = new RegExp('^[ ' + NB + ']' + WJ + '?$'), reWJ = new RegExp(WJ + '+$'),
+        fs = parseFloat(getComputedStyle(main).fontSize) || 17;
+    function hasKx(e) { return e.classList.contains('kx') || !!e.querySelector('.kx'); }
+    function small(e) { try { return e.getBoundingClientRect().width <= main.clientWidth * 0.45; } catch (x) { return false; } }
+    /* склеивать можно только то, что не сделает строку нерастяжимой: подсвеченный фрагмент (внутри он переносится как обычно)
+       или элемент, который вместе со словом умещается в строке — иначе неразрывная группа вылезла бы за поле страницы */
+    function glueOk(e, wlen) {
+      if (e.classList.contains('ht') || (INL.test(e.tagName) && startKx(e))) return true;   /* внутри такой группы текст переносится как обычно */
+      try { return e.getBoundingClientRect().width + (wlen || 3) * 0.62 * fs + 2 <= main.clientWidth; } catch (x) { return false; }
+    }
     var w = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, null), n, list = [];
     while ((n = w.nextNode())) {
-      var nx = n.nextSibling, pv = n.previousSibling;
-      if (nx && pv && pv.nodeType === 1 && /^[ \u00a0]$/.test(n.nodeValue) && nx.nodeType === 1 && (nx.classList.contains('kx') || nx.querySelector('.kx')) && /(^|[^A-Za-z0-9_Ѐ-ӿ\-–—])(в|к|с|о|у|и|а|я|но|на|по|за|из|от|до|ко|об|во|со|не|ни|да|то|для|при|над|под|про|без|или|как|что|чем|где)$/i.test(pv.textContent || '') && !pv.closest('.katex, .kd, .nw')) { n.nodeValue = '\u00a0\u2060'; continue; }
-      if (!nx && n.parentElement && n.parentElement !== main && /^(MARK|EM|I|B|STRONG|SPAN)$/.test(n.parentElement.tagName) && !n.parentElement.classList.contains('nw') && re.test(n.nodeValue) && n.parentElement.nextSibling && n.parentElement.nextSibling.nodeType === 1 && (n.parentElement.nextSibling.classList.contains('kx') || n.parentElement.nextSibling.querySelector('.kx'))) { n.nodeValue += '\u2060'; continue; }
+      var nx = n.nextSibling, pv = n.previousSibling, par = n.parentElement;
+      if (par && par.closest('.katex, .kd, .katex-mathml, script, style')) continue;
+      /* 1) слово — в конце предыдущего элемента, между ними только пробел */
+      if (nx && pv && pv.nodeType === 1 && reSp.test(n.nodeValue) && nx.nodeType === 1 && hasKx(nx) && reEnd.test(pv.textContent || '') && !pv.closest('.nw')) { list.push([1, n]); continue; }
+      /* 2) слово — в конце текста внутри элемента (подсветка, курсив), формула — сразу за этим элементом */
+      if (!nx && par && par !== main && /^(MARK|EM|I|B|STRONG|SPAN)$/.test(par.tagName) && !par.closest('.nw') && re.test(n.nodeValue) && par.nextSibling && par.nextSibling.nodeType === 1 && hasKx(par.nextSibling)) { list.push([2, n]); continue; }
+      /* 3) слово — в конце текста, формула (или группа с ней) — следующий элемент */
       if (!nx || nx.nodeType !== 1 || !re.test(n.nodeValue)) continue;
       if (!(nx.classList.contains('kx') || nx.classList.contains('ht') || nx.classList.contains('nb') || nx.querySelector('.kx'))) continue;
-      if (n.parentElement && n.parentElement.closest('.katex, .kd, .katex-mathml, script, style, .nw')) continue;
-      list.push(n);
+      if (par && par.closest('.nw')) continue;
+      list.push([3, n]);
     }
-    list.forEach(function (t) {
-      var m = re.exec(t.nodeValue), nx = t.nextSibling, cut = m.index + m[1].length, word = t.nodeValue.slice(cut, -1) + ' ';
-      t.nodeValue = t.nodeValue.slice(0, cut);
-      var wr = document.createElement('span'); wr.className = 'nw'; nx.parentNode.insertBefore(wr, nx);
-      wr.appendChild(document.createTextNode(word)); wr.appendChild(nx);
+    list.forEach(function (it) {
+      var kind = it[0], t = it[1], nx = t.nextSibling, wr;
+      if (kind === 1) {
+        if (!glueOk(nx, 2)) { t.nodeValue = NB + WJ; return; }
+        t.nodeValue = NB; wr = document.createElement('span'); wr.className = 'nw'; nx.parentNode.insertBefore(wr, t); wr.appendChild(t); wr.appendChild(nx);
+      } else if (kind === 2) {
+        var par = t.parentElement, nxp = par.nextSibling;
+        var v2 = t.nodeValue.replace(reWJ, '');
+        if (!(INL.test(par.tagName) && glueOk(nxp, 2))) { t.nodeValue = v2 + WJ; return; }
+        t.nodeValue = v2.slice(0, -1) + NB; wr = document.createElement('span'); wr.className = 'nw'; par.parentNode.insertBefore(wr, par); wr.appendChild(par); wr.appendChild(nxp);
+      } else {
+        var v3 = t.nodeValue.replace(reWJ, ''), m = re.exec(v3), cut = m.index + m[1].length, word = v3.slice(cut, -1) + ' ';
+        /* длинное продолжение (например, целая подсвеченная фраза) нельзя склеивать целиком — иначе строка не переносится */
+        if (!glueOk(nx, word.length)) { t.nodeValue = v3.slice(0, -1) + NB + WJ; return; }
+        t.nodeValue = v3.slice(0, cut);
+        wr = document.createElement('span'); wr.className = 'nw'; nx.parentNode.insertBefore(wr, nx); wr.appendChild(document.createTextNode(word)); wr.appendChild(nx);
+      }
+    });
+  }
+  /* знаки препинания и тире не отрываются от формулы: «формула + запятая», «(формула», «формула — …» собираются в неразрывную группу span.nw
+     (по правилам CSS между формулой-блоком и соседним знаком перенос разрешён, поэтому запятая, скобка или тире иначе могут начать/закончить строку).
+     Подсвеченный и курсивный фрагмент внутри группы переносится как обычно (см. .nw > mark в style.css). Широкие формулы не трогаем */
+  function startKx(e) {
+    while (e && e.nodeType === 1) { if (e.classList.contains('kx')) return e; e = e.firstChild; }
+    return null;
+  }
+  function glueEdges() {
+    if (!main) return;
+    var NB = String.fromCharCode(160), WJ = String.fromCharCode(0x2060),
+        reB = new RegExp('[' + NB + WJ + ']', 'g'),
+        reD = new RegExp('^([ ' + NB + WJ + ']*)([—–])'),
+        reP = /^[,.;:!?%)\]»”…]+/, reO = /[(«\[„“]+$/, INL = /^(MARK|EM|I|B|STRONG)$/;
+    function endKx(e) {
+      while (e && e.nodeType === 1) {
+        if (e.classList.contains('kx')) return e;
+        var l = e.lastChild;
+        while (l && l.nodeType === 3 && !/\S/.test(l.nodeValue.replace(reB, ''))) l = l.previousSibling;
+        e = l;
+      }
+      return null;
+    }
+    var fs = parseFloat(getComputedStyle(main).fontSize) || 17;
+    function wide(k) { try { return k.getBoundingClientRect().width + 1.4 * fs > main.clientWidth; } catch (e) { return true; } }
+    var w = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, null), n, after = [], before = [];
+    while ((n = w.nextNode())) {
+      var v = n.nodeValue, x, pv, ws, nx, k;
+      if (n.parentElement && n.parentElement.closest('.katex, .kd, .katex-mathml, script, style')) continue;
+      if (reD.test(v) || reP.test(v)) {
+        x = n; pv = x.previousSibling; ws = null;
+        while (!pv && x.parentNode && x.parentNode !== main && /^(MARK|EM|I|B|STRONG|SPAN)$/.test(x.parentNode.tagName)) { x = x.parentNode; pv = x.previousSibling; }
+        if (pv && pv.nodeType === 3 && !/\S/.test(pv.nodeValue.replace(reB, ''))) { ws = pv; pv = pv.previousSibling; }
+        if (pv && pv.nodeType === 1 && pv.previousSibling && (x === n || INL.test(x.tagName))) { k = endKx(pv); if (k && !wide(k)) after.push([n, x, pv, ws, 'nw']); else if (k && x === n && !ws && /^[,.;:!?)\]»”…]{1,2}($|[^,.;:!?)\]»”…])/.test(v)) after.push([n, x, pv, ws, 'np']); }
+      }
+      if (reO.test(v) && !(n.parentElement && n.parentElement.closest('.nw, .np'))) {
+        x = n; nx = x.nextSibling;
+        while (!nx && x.parentNode && x.parentNode !== main && INL.test(x.parentNode.tagName)) { x = x.parentNode; nx = x.nextSibling; }
+        if (nx && nx.nodeType === 1 && (x === n || INL.test(x.tagName))) { k = startKx(nx); if (k && !wide(k)) before.push([n, x, nx]); }
+      }
+    }
+    before.forEach(function (it) {
+      var t = it[0], x = it[1], nx = it[2], wr = document.createElement('span');
+      wr.className = 'nw';
+      if (x === t) {
+        var m = reO.exec(t.nodeValue); t.nodeValue = t.nodeValue.slice(0, m.index);
+        nx.parentNode.insertBefore(wr, nx); wr.appendChild(document.createTextNode(m[0])); wr.appendChild(nx);
+      } else { x.parentNode.insertBefore(wr, x); wr.appendChild(x); wr.appendChild(nx); }
+    });
+    after.forEach(function (it) {
+      var t = it[0], x = it[1], pv = it[2], ws = it[3], d = reD.exec(t.nodeValue), p = d ? null : reP.exec(t.nodeValue), wr = document.createElement('span');
+      var sp = d && (d[1].replace(new RegExp(WJ, 'g'), '') || ws) ? NB : '';   /* пробел перед тире сохраняем (в тексте он уже неразрывный), убираем только U+2060 */
+      wr.className = it[4];
+      pv.parentNode.insertBefore(wr, pv); wr.appendChild(pv);
+      if (ws && ws.parentNode) ws.parentNode.removeChild(ws);
+      if (x === t) { var cut = d ? d[0] : p[0]; wr.appendChild(document.createTextNode(d ? sp + d[2] : cut)); t.nodeValue = t.nodeValue.slice(cut.length); }
+      else { if (d) t.nodeValue = sp + t.nodeValue.slice(d[1].length); wr.appendChild(x); }
     });
   }
   function enhance() {
-    glueRel(); glueShort(); readability(); keyFormulas(); symInit();
+    glueRel(); glueShort(); glueEdges(); readability(); keyFormulas(); symInit();
     addAnchors(); linkRefs(); showResume(); restorePos(); buildChNav(); withToc(function () { buildTree(); linkSecRefs(); linkParas(); }); treeByScroll(); openHash();
     window.addEventListener('scroll', function () { if (!enhance.r) enhance.r = requestAnimationFrame(function () { enhance.r = 0; treeByScroll(); }); }, { passive: true });
   }
